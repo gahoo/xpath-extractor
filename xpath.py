@@ -9,6 +9,7 @@ from retry import retry
 import asyncio
 from aiohttp_client_cache import CachedSession, SQLiteBackend
 from lxml import etree
+import elementpath
 import json
 import progressbar
 
@@ -40,8 +41,11 @@ class Browser(object):
 
     def xpath(self, html, xpath):
         doc = etree.HTML(html)
-        res = doc.xpath(xpath)
-        if res and not isinstance(res[0], etree._ElementUnicodeResult):
+        if args.xpath2:
+            res = elementpath.select(doc, xpath)
+        else:
+            res = doc.xpath(xpath)
+        if res and not isinstance(res[0], etree._ElementUnicodeResult) and not isinstance(res[0], str):
             res = [r.text for r in res]
         return res
 
@@ -95,6 +99,7 @@ if __name__ == '__main__':
     parser.add_argument('--xpaths', nargs='+', action=keyvalue, help=" name:xpath")
     parser.add_argument('--headers', nargs='+', action=keyvalue, help="headers")
     parser.add_argument('--json', action='store_true', help="output json format")
+    parser.add_argument('--xpath2', action='store_true', help="use xpath 2.0")
     parser.add_argument('--tab', action='store_true', help="output tabluar format")
     parser.add_argument('--progress', action='store_true', help="show progressbar")
     parser.add_argument('--out', type=argparse.FileType('w'), default=sys.stdout, help="filename")
