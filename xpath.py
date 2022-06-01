@@ -10,6 +10,7 @@ import asyncio
 from aiohttp_client_cache import CachedSession, SQLiteBackend
 from lxml import etree
 import json
+import progressbar
 
 
 class keyvalue(argparse.Action):
@@ -44,15 +45,21 @@ class Browser(object):
             res = [r.text for r in res]
         return res
 
-    async def parse(self, session, url):
+    async def parse(self, session, url, bar=None, i=None):
         html = await self.get(session, url)
         self.results[url] = {k:self.xpath(html, v) for k, v in self.xpaths.items()}
+        if bar and i:
+            bar.update(i)
 
 
     async def harvest(self):
         cache = SQLiteBackend(cache_name='cache.db', expire_after=-1)
         async with CachedSession(cache=cache) as session:
-            tasks = [asyncio.create_task(self.parse(session, url)) for url in self.urls]
+            if args.progress:
+                bar = progressbar.ProgressBar(max_value=len(self.urls))
+                tasks = [asyncio.create_task(self.parse(session, url, bar, i)) for i, url in enumerate(self.urls)]
+            else:
+                tasks = [asyncio.create_task(self.parse(session, url)) for url in self.urls]
             return await asyncio.gather(*tasks)
 
     def json(self, filename):
@@ -89,6 +96,7 @@ if __name__ == '__main__':
     parser.add_argument('--headers', nargs='+', action=keyvalue, help="headers")
     parser.add_argument('--json', action='store_true', help="output json format")
     parser.add_argument('--tab', action='store_true', help="output tabluar format")
+    parser.add_argument('--progress', action='store_true', help="show progressbar")
     parser.add_argument('--out', type=argparse.FileType('w'), default=sys.stdout, help="filename")
     parser.add_argument('--prefix', help="file prefix")
     
