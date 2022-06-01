@@ -24,16 +24,6 @@ class keyvalue(argparse.Action):
             # assign into dictionary
             getattr(namespace, self.dest)[key] = value
 
-parser = argparse.ArgumentParser(description='xpath extractor.')
-parser.add_argument('urls', nargs='+', type=str, help="URL.")
-parser.add_argument('--xpaths', nargs='+', action=keyvalue, help=" name:xpath")
-parser.add_argument('--headers', nargs='+', action=keyvalue, help="headers")
-parser.add_argument('--json', action='store_true', help="output json format")
-parser.add_argument('--tab', action='store_true', help="output tabluar format")
-parser.add_argument('--out', type=argparse.FileType('w'), default=sys.stdout, help="wait in seconds")
-
-args = parser.parse_args()
-
 class Browser(object):
     def __init__(self, urls, xpaths, headers=None):
        self.urls = urls
@@ -76,14 +66,32 @@ class Browser(object):
             content.append(url + "\t" + "\t".join(extracted))
         filename.write("\n".join(content))
 
-
 async def main():
     b = Browser(args.urls, args.xpaths, args.headers)
     await b.harvest()
-    if args.json:
+    if args.json or args.out.name.endswith('.json'):
         b.json(args.out)
-    if args.tab:
+    elif args.tab or args.out.name.endswith('.tsv'):
+        b.tabular(args.out)
+    elif args.prefix:
+        with open(args.prefix + '.json', 'w') as f:
+            b.json(f)
+        with open(args.prefix + '.tsv', 'w') as f:
+            b.tabular(f)
+    else:
         b.tabular(args.out)
 
+
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='xpath extractor.')
+    parser.add_argument('urls', nargs='+', type=str, help="URL.")
+    parser.add_argument('--xpaths', nargs='+', action=keyvalue, help=" name:xpath")
+    parser.add_argument('--headers', nargs='+', action=keyvalue, help="headers")
+    parser.add_argument('--json', action='store_true', help="output json format")
+    parser.add_argument('--tab', action='store_true', help="output tabluar format")
+    parser.add_argument('--out', type=argparse.FileType('w'), default=sys.stdout, help="filename")
+    parser.add_argument('--prefix', help="file prefix")
+    
+    args = parser.parse_args()
+
     asyncio.run(main())
