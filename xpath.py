@@ -12,6 +12,7 @@ from lxml import etree
 import elementpath
 import json
 import progressbar
+import logging
 
 
 class keyvalue(argparse.Action):
@@ -31,8 +32,8 @@ class Browser(object):
        self.urls = urls
        self.xpaths = xpaths
        self.results = dict()
-       if(headers):
-           self.session.headers.update(headers)
+       self.failed_urls = list()
+       self.headers = headers
 
     @retry(delay=10, tries=3)
     async def get(self, session, url):
@@ -49,21 +50,31 @@ class Browser(object):
             res = [r.text for r in res]
         return res
 
-    async def parse(self, session, url, bar=None, i=None):
+    async def parse(self, session, url, bar=None):
         html = await self.get(session, url)
-        self.results[url] = {k:self.xpath(html, v) for k, v in self.xpaths.items()}
-        if bar and i:
-            bar.update(i)
+        try:
+            self.results[url] = {k:self.xpath(html, v) for k, v in self.xpaths.items()}
+        except (etree.XPathEvalError, elementpath.exceptions.ElementPathTypeError) as e:
+            logging.error(e)
+            self.failed_urls.append(url)
+
+        if bar:
+            bar.update(len(self.results))
+
+        if args.interval:
+            time.sleep(args.interval)
 
 
     async def harvest(self):
         cache = SQLiteBackend(cache_name='cache.db', expire_after=-1)
         async with CachedSession(cache=cache) as session:
+            if(self.headers):
+                session.headers.update(self.headers)
             if args.progress:
                 bar = progressbar.ProgressBar(max_value=len(self.urls))
-                tasks = [asyncio.create_task(self.parse(session, url, bar, i)) for i, url in enumerate(self.urls)]
             else:
-                tasks = [asyncio.create_task(self.parse(session, url)) for url in self.urls]
+                bar = None
+            tasks = [asyncio.create_task(self.parse(session, url, bar)) for url in self.urls]
             return await asyncio.gather(*tasks)
 
     def json(self, filename):
@@ -76,6 +87,10 @@ class Browser(object):
             extracted = ["; ".join(filter(lambda x:x, v)) for v in xpaths.values()]
             content.append(url + "\t" + "\t".join(extracted))
         filename.write("\n".join(content))
+
+    def dump_failed(self, filename):
+        filename.write("\n".join(self.failed_urls))
+
 
 async def main():
     b = Browser(args.urls, args.xpaths, args.headers)
@@ -92,6 +107,14 @@ async def main():
     else:
         b.tabular(args.out)
 
+    if b.failed_urls:
+        if args.prefix:
+            prefix = args.prefix
+        elif args.out:
+            prefix = args.out.name
+        with open(prefix + '.log', 'w') as f:
+            b.dump_failed(f)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='xpath extractor.')
@@ -102,6 +125,7 @@ if __name__ == '__main__':
     parser.add_argument('--xpath2', action='store_true', help="use xpath 2.0")
     parser.add_argument('--tab', action='store_true', help="output tabluar format")
     parser.add_argument('--progress', action='store_true', help="show progressbar")
+    parser.add_argument('--interval', type=float, help="wait for seconds")
     parser.add_argument('--out', type=argparse.FileType('w'), default=sys.stdout, help="filename")
     parser.add_argument('--prefix', help="file prefix")
     
