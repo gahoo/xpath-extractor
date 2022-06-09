@@ -61,6 +61,11 @@ class Browser(object):
         if bar:
             bar.update(len(self.results))
 
+        if args.debug:
+            print(url)
+            print(self.results[url])
+            print(html)
+
         if args.interval:
             time.sleep(args.interval)
 
@@ -123,6 +128,7 @@ if __name__ == '__main__':
     parser.add_argument('--headers', nargs='+', action=keyvalue, help="headers")
     parser.add_argument('--json', action='store_true', help="output json format")
     parser.add_argument('--xpath2', action='store_true', help="use xpath 2.0")
+    parser.add_argument('--debug', action='store_true', help="show more info")
     parser.add_argument('--tab', action='store_true', help="output tabluar format")
     parser.add_argument('--progress', action='store_true', help="show progressbar")
     parser.add_argument('--interval', type=float, help="wait for seconds")
