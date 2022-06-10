@@ -51,10 +51,10 @@ class Browser(object):
         return res
 
     async def parse(self, session, url, bar=None):
-        html = await self.get(session, url)
         try:
+            html = await self.get(session, url)
             self.results[url] = {k:self.xpath(html, v) for k, v in self.xpaths.items()}
-        except (etree.XPathEvalError, elementpath.exceptions.ElementPathTypeError) as e:
+        except (etree.XPathEvalError, elementpath.exceptions.ElementPathTypeError, UnicodeDecodeError) as e:
             logging.error(e)
             self.failed_urls.append(url)
 
