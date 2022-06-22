@@ -8,6 +8,7 @@ import sys
 from retry import retry
 import asyncio
 from aiohttp_client_cache import CachedSession, SQLiteBackend
+from aiohttp import client_exceptions
 from lxml import etree
 import elementpath
 import json
@@ -54,7 +55,7 @@ class Browser(object):
         try:
             html = await self.get(session, url)
             self.results[url] = {k:self.xpath(html, v) for k, v in self.xpaths.items()}
-        except (etree.XPathEvalError, elementpath.exceptions.ElementPathTypeError, UnicodeDecodeError) as e:
+        except (etree.XPathEvalError, elementpath.exceptions.ElementPathTypeError, UnicodeDecodeError, client_exceptions.ServerDisconnectedError) as e:
             logging.error(e)
             self.failed_urls.append(url)
 
