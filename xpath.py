@@ -14,6 +14,7 @@ import elementpath
 import json
 import progressbar
 import logging
+import cloudscraper
 
 
 class keyvalue(argparse.Action):
@@ -35,11 +36,20 @@ class Browser(object):
        self.results = dict()
        self.failed_urls = list()
        self.headers = headers
+       if args.cloudflare:
+           self.cloudflare = cloudscraper.create_scraper()
+       else:
+           self.cloudflare = None
 
     @retry(delay=10, tries=3)
     async def get(self, session, url):
-        resp = await session.get(url)
-        return await resp.text()
+        if self.cloudflare:
+            resp = self.cloudflare.get(url)
+            html = resp.text
+        else:
+            resp = await session.get(url)
+            html = await resp.text()
+        return html
 
     def xpath(self, html, xpath):
         doc = etree.HTML(html)
@@ -131,6 +141,7 @@ if __name__ == '__main__':
     parser.add_argument('--xpath2', action='store_true', help="use xpath 2.0")
     parser.add_argument('--debug', action='store_true', help="show more info")
     parser.add_argument('--tab', action='store_true', help="output tabluar format")
+    parser.add_argument('--cloudflare', action='store_true', help="by pass cloudflare")
     parser.add_argument('--progress', action='store_true', help="show progressbar")
     parser.add_argument('--interval', type=float, help="wait for seconds")
     parser.add_argument('--out', type=argparse.FileType('w'), default=sys.stdout, help="filename")
