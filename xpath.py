@@ -8,7 +8,10 @@ import sys
 from retry import retry
 import asyncio
 from aiohttp_client_cache import CachedSession, SQLiteBackend
-from aiohttp import client_exceptions
+from aiohttp_client_cache.cache_keys import create_key
+from aiohttp_client_cache.response import CachedResponse
+from aiohttp_client_cache.backends.sqlite import SQLitePickleCache
+from aiohttp import client_exceptions, HttpVersion
 from lxml import etree
 import elementpath
 import json
@@ -36,6 +39,7 @@ class Browser(object):
        self.results = dict()
        self.failed_urls = list()
        self.headers = headers
+       self.cache = SQLitePickleCache('cache.db', expire_after=-1)
        if args.cloudflare:
            self.cloudflare = cloudscraper.create_scraper()
        else:
@@ -44,12 +48,20 @@ class Browser(object):
     @retry(delay=10, tries=3)
     async def get(self, session, url):
         if self.cloudflare:
-            resp = self.cloudflare.get(url)
-            html = resp.text
+            resp = await self.cached_cloudflare(url)
         else:
             resp = await session.get(url)
-            html = await resp.text()
+        html = await resp.text()
         return html
+
+    async def cached_cloudflare(self, url):
+        key = create_key('GET', url, headers=self.headers)
+        resp = await self.cache.read(key)
+        if not resp:
+            resp = self.cloudflare.get(url)
+            resp = CachedResponse(resp.request.method, resp.reason, resp.status_code, url, HttpVersion(resp.raw.version // 10, resp.raw.version % 10), body = resp.content, history=resp.history)
+            await self.cache.write(key, resp)
+        return resp
 
     def xpath(self, html, xpath):
         doc = etree.HTML(html)
