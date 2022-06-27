@@ -77,6 +77,8 @@ class Browser(object):
         try:
             html = await self.get(session, url)
             self.results[url] = {k:self.xpath(html, v) for k, v in self.xpaths.items()}
+            if args.additional_info:
+                self.results[url].update(args.additional_info)
         except (etree.XPathEvalError, elementpath.exceptions.ElementPathTypeError, UnicodeDecodeError, client_exceptions.ServerDisconnectedError) as e:
             logging.error(e)
             self.failed_urls.append(url)
@@ -149,6 +151,7 @@ if __name__ == '__main__':
     parser.add_argument('urls', nargs='+', type=str, help="URL.")
     parser.add_argument('--xpaths', nargs='+', action=keyvalue, help=" name:xpath")
     parser.add_argument('--headers', nargs='+', action=keyvalue, help="headers")
+    parser.add_argument('--additional_info', nargs='+', action=keyvalue, help="headers")
     parser.add_argument('--json', action='store_true', help="output json format")
     parser.add_argument('--xpath2', action='store_true', help="use xpath 2.0")
     parser.add_argument('--debug', action='store_true', help="show more info")
