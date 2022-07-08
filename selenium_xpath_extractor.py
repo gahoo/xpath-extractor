@@ -58,55 +58,50 @@ class Browser(object):
         if self.cookies:
             self.driver.add_cookie(self.cookies)
 
-    def xpath(self, html, xpath):
-        doc = etree.HTML(html)
-        if args.xpath2:
-            res = elementpath.select(doc, xpath)
+    def xpath(self, xpath, attr=None):
+        xpath, attr = xpath.split('@', -1)
+        xpath = xpath.rstrip('/')
+        elements = self.driver.find_elements(By.XPATH, xpath)
+        if attr:
+            res = [e.get_attribute(attr) for e in elements]
         else:
-            res = doc.xpath(xpath)
-        if res and not isinstance(res[0], etree._ElementUnicodeResult) and not isinstance(res[0], str):
-            res = [r.text for r in res]
+            res = [e.text for e in elements]
         return res
 
-    def parse(self, session, url, bar=None):
+    def extract(self, xpaths):
         try:
-            html = self.get(session, url)
-            self.results[url] = {k:self.xpath(html, v) for k, v in self.xpaths.items()}
+            results = {k:self.xpath(v) for k, v in xpaths.items()}
             if args.additional_info:
-                self.results[url].update(args.additional_info)
-        except (etree.XPathEvalError, elementpath.exceptions.ElementPathTypeError, UnicodeDecodeError, client_exceptions.ServerDisconnectedError) as e:
+                results.update(args.additional_info)
+        except (UnicodeDecodeError) as e:
             logging.error(e)
             self.failed_urls.append(url)
-
-        if bar:
-            bar.update(len(self.results))
 
         if args.debug:
             print(url)
             print(self.results[url])
-            print(html)
 
         if args.interval:
             time.sleep(args.interval)
+
+        return results
 
     def do(self, actions):
         ele = self.driver
         for action_to_parse in actions:
             act, arg = action_to_parse.split(':', 1)
-            print(act)
             if act.startswith('find_element'):
                 ele = getattr(ele, act)(By.XPATH, arg)
             else:
                 ele = getattr(ele, act)()
 
-            if not self.is_element_exists(ele) or ele is None:
+            if not self.is_element_exists(ele):
                 ele = self.driver
-
 
     def is_element_exists(self, ele):
         try:
             ele.text
-        except StaleElementReferenceException as e:
+        except (StaleElementReferenceException, AttributeError) as e:
             return False
         return True
 
@@ -116,6 +111,7 @@ class Browser(object):
                 bar.update(i)
                 self.get(url)
                 self.do(args.actions)
+                self.results[url] = self.extract(args.xpaths)
 
     def json(self, filename):
         filename.write(json.dumps(self.results, ensure_ascii = False))
